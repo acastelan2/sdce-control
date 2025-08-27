@@ -195,6 +195,23 @@ void set_obst(vector<double> x_points, vector<double> y_points, vector<State>& o
 	obst_flag = true;
 }
 
+vector<double> find_closest_point(const vector<double>& x_points, const vector<double>& y_points, double actual_x, double actual_y){
+  double min_distance = std::numeric_limits<double>::max();
+  vector<double> closest_point(2);
+
+  for (size_t i = 0; i < x_points.size(); ++i){
+    double dx = x_points[i] - actual_x;
+    double dy = y_points[i] - actual_y;
+    double squared_distance = dx*dx + dy*dy
+    if (squared_distance < min_distance){
+      min_distance = squared_distance;
+      closest_point[0] = x_points[i];
+      closest_point[1] = y_points[i]
+    }
+  }
+  return closest_point;
+}
+
 int main ()
 {
   cout << "starting server" << endl;
@@ -226,7 +243,16 @@ int main ()
   **/
 
   PID pid_steer = PID();
+  double steer_p = 0.2;
+  double steer_i = 0.05;
+  double steer_d = 0.1;
+  pid_steer.Init(steer_p, steer_i, steer_d, 1.2, -1.2);
+
   PID pid_throttle = PID();
+  double throttle_p = 0.2;
+  double throttle_i = 0.05;
+  double throttle_d = 0.1;
+  pid_throttle.Init(throttle_p, throttle_i, throttle_d, 1, -1);
 
   h.onMessage([&pid_steer, &pid_throttle, &new_delta_time, &timer, &prev_timer, &i, &prev_timer](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode)
   {
@@ -288,8 +314,8 @@ int main ()
           /**
           * TODO (step 3): uncomment these lines
           **/
-//           // Update the delta time with the previous command
-//           pid_steer.UpdateDeltaTime(new_delta_time);
+          // Update the delta time with the previous command
+          pid_steer.UpdateDeltaTime(new_delta_time);
 
           // Compute steer error
           double error_steer;
@@ -300,23 +326,41 @@ int main ()
           /**
           * TODO (step 3): compute the steer error (error_steer) from the position and the desired trajectory
           **/
-//           error_steer = 0;
+          //the error in steer is defined as the angular difference between the actual steer and the desired steer
+          //we know the vehicle's yaw and from earlier lessons learned that the yaw can represent a forward-facing vector
+          //we do not know the desired yaw, but we can know the desired vector by comparing the position at the end of the planned trajectory with our current position
+          //recalling trigonometry, we know that the similarity in direction between two vectors is given by their dot product over the product of their respective magnitudes
+          //in other words, cos(theta) gives a measure of how aligned the actual and desired steer directions are, as determined by the angle theta
+          //thus, inverting this cosine angle to find theta gives the angular difference
+          // double actual_x = cos(yaw);
+          // double actual_y = sin(yaw);
+          // double desired_x = x_points.back() - x_position;
+          // double desired_y = y_points.back() - y_position;
+          // double dot_product = desired_x * actual_x + desired_y * actual_y;
+          // double mag_desired = sqrt(pow(desired_x,2) + pow(desired_y,2));
+          // double mag_actual = sqrt(pow(actual_x,2) + pow(actual_y,2));
+          // double cos_theta = dot_product / (mag_desired * mag_actual);
+          // //pass a valid domain to the acos function
+          // cos_theta = min(max(cos_theta, -1.0), 1.0);
+          // //theta = arccos(cos(theta))
+          vector<double> closest_point = find_closest_point(x_points, y_points, x_position, y_position);
+          error_steer = angle_between_points(closest_point[0], closest_point[1], x_position, y_position) - yaw;
 
           /**
           * TODO (step 3): uncomment these lines
           **/
-//           // Compute control to apply
-//           pid_steer.UpdateError(error_steer);
-//           steer_output = pid_steer.TotalError();
+          // Compute control to apply
+          pid_steer.UpdateError(error_steer);
+          steer_output = pid_steer.TotalError();
 
-//           // Save data
-//           file_steer.seekg(std::ios::beg);
-//           for(int j=0; j < i - 1; ++j) {
-//               file_steer.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-//           }
-//           file_steer  << i ;
-//           file_steer  << " " << error_steer;
-//           file_steer  << " " << steer_output << endl;
+          // Save data
+          file_steer.seekg(std::ios::beg);
+          for(int j=0; j < i - 1; ++j) {
+              file_steer.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+          }
+          file_steer  << i ;
+          file_steer  << " " << error_steer;
+          file_steer  << " " << steer_output << endl;
 
           ////////////////////////////////////////
           // Throttle control
@@ -325,18 +369,19 @@ int main ()
           /**
           * TODO (step 2): uncomment these lines
           **/
-//           // Update the delta time with the previous command
-//           pid_throttle.UpdateDeltaTime(new_delta_time);
+          // Update the delta time with the previous command
+          pid_throttle.UpdateDeltaTime(new_delta_time);
 
           // Compute error of speed
           double error_throttle;
           /**
           * TODO (step 2): compute the throttle error (error_throttle) from the position and the desired speed
           **/
-          // modify the following line for step 2
-          error_throttle = 0;
 
-
+          //the error in throttle is defined as the speed difference between the actual speed and the desired speed
+          //the actual velocity is always known and the desired velocity is determined by how fast we would need to go to reach the desired position at the end of the planned trajectory
+          //thus the error throttle calculation is straightforward
+          error_throttle =  v_points.back() - velocity;
 
           double throttle_output;
           double brake_output;
@@ -344,28 +389,28 @@ int main ()
           /**
           * TODO (step 2): uncomment these lines
           **/
-//           // Compute control to apply
-//           pid_throttle.UpdateError(error_throttle);
-//           double throttle = pid_throttle.TotalError();
+          // Compute control to apply
+          pid_throttle.UpdateError(error_throttle);
+          double throttle = pid_throttle.TotalError();
 
-//           // Adapt the negative throttle to break
-//           if (throttle > 0.0) {
-//             throttle_output = throttle;
-//             brake_output = 0;
-//           } else {
-//             throttle_output = 0;
-//             brake_output = -throttle;
-//           }
+          // Adapt the negative throttle to break
+          if (throttle > 0.0) {
+            throttle_output = throttle;
+            brake_output = 0;
+          } else {
+            throttle_output = 0;
+            brake_output = -throttle;
+          }
 
-//           // Save data
-//           file_throttle.seekg(std::ios::beg);
-//           for(int j=0; j < i - 1; ++j){
-//               file_throttle.ignore(std::numeric_limits<std::streamsize>::max(),'\n');
-//           }
-//           file_throttle  << i ;
-//           file_throttle  << " " << error_throttle;
-//           file_throttle  << " " << brake_output;
-//           file_throttle  << " " << throttle_output << endl;
+          // Save data
+          file_throttle.seekg(std::ios::beg);
+          for(int j=0; j < i - 1; ++j){
+              file_throttle.ignore(std::numeric_limits<std::streamsize>::max(),'\n');
+          }
+          file_throttle  << i ;
+          file_throttle  << " " << error_throttle;
+          file_throttle  << " " << brake_output;
+          file_throttle  << " " << throttle_output << endl;
 
 
           // Send control

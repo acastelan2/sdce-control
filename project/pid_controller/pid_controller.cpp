@@ -33,13 +33,13 @@ void PID::UpdateError(double cte) {
    /**
    * TODO: Update PID errors based on cte.
    **/
-  err_P = -coef_P * cte;
+  err_P = coef_P * cte;
 
-  err_D = delta_time == 0.0 ? 0.0 : -coef_D * (cte - prev_cte) / delta_time;
+  err_D = delta_time == 0.0 ? 0.0 : coef_D * (cte - prev_cte) / delta_time;
   prev_cte = cte;
   
-  sum_cte += cte;
-  err_I = -coef_I * sum_cte;  
+  sum_cte += cte * delta_time;
+  err_I = coef_I * sum_cte;  
 }
 
 double PID::TotalError() {
